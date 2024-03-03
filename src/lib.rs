@@ -1,6 +1,4 @@
 use std::{
-    cell::RefCell,
-    collections::HashMap,
     fmt::{Debug, Display},
     str::FromStr,
 };
@@ -8,10 +6,14 @@ use std::{
 use num_traits::{zero, Float};
 use tao::{
     event::{Event, StartCause, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::{ControlFlow, EventLoopBuilder},
     window::WindowBuilder,
 };
-use wry::{WebView, WebViewAttributes, WebViewBuilder};
+use wry::{WebViewAttributes, WebViewBuilder};
+
+enum UserEvents {
+    ExecEval(String),
+}
 
 pub enum Input {
     Number(f64),
@@ -30,10 +32,6 @@ where
     P: 'static + Fn(Vec<F>) -> F,
     <F as FromStr>::Err: Debug,
 {
-    thread_local! {
-        static WEBVIEW: RefCell<HashMap<usize, WebView>> = RefCell::new(HashMap::new());
-    }
-
     let mut html = beginning();
     for (idx, input) in inputs.iter().enumerate() {
         html.push_str(&match input {
@@ -49,7 +47,13 @@ where
     }
     html.push_str(&end());
 
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoopBuilder::<UserEvents>::with_user_event().build();
+    let proxy = event_loop.create_proxy();
+
+    let ipc_handler = move |req: String| {
+        let _ = proxy.send_event(UserEvents::ExecEval(req));
+    };
+
     let window = WindowBuilder::new()
         .with_title("Tissue")
         .build(&event_loop)
@@ -81,37 +85,29 @@ where
     builder.attrs = webview_settings;
     let _webview = builder
         .with_html(&html)
-        .with_ipc_handler(move |req: String| {
-            let number_strings = req.split(",");
-            let mut inputs = vec![zero(); 0];
-            for number in number_strings {
-                inputs.push(number.parse().unwrap());
-            }
-
-            let y = predictor(inputs);
-            WEBVIEW
-                .with(|webview| {
-                    let webview = webview.borrow();
-                    let my_webview = webview.get(&0).unwrap();
-                    my_webview.evaluate_script_with_callback(&*format!(
-                        "document.getElementById('output').value = {}",
-                        y
-                    ), |result| println!("{}", result))
-                })
-                .expect("TODO: panic message");
-        })
+        .with_ipc_handler(ipc_handler)
         .build()
         .unwrap();
-
-    WEBVIEW.with(|wv| {
-        let mut hash = wv.borrow_mut();
-        hash.insert(0_usize, _webview);
-    });
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
 
         match event {
+            Event::UserEvent(UserEvents::ExecEval(req)) => {
+                let number_strings = req.split(",");
+                let mut inputs = vec![zero(); 0];
+                for number in number_strings {
+                    inputs.push(number.parse().unwrap());
+                }
+
+                let y = predictor(inputs);
+                _webview
+                    .evaluate_script_with_callback(
+                        &*format!("document.getElementById('output').value = {}", y),
+                        |result| println!("{}", result),
+                    )
+                    .unwrap()
+            }
             Event::NewEvents(StartCause::Init) => println!("Wry has started!"),
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
