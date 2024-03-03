@@ -8,3 +8,7 @@ edition = "2021"
 [dependencies]
 tao = "0.25"
 wry = "0.37"
+num-traits = "0.2.15"
+
+[dev-dependencies]
+smartcore = "0.2.0"
