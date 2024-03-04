@@ -67,14 +67,16 @@ where
     ))]
     let mut builder = WebViewBuilder::new(&window);
 
+    #[cfg(target_os = "linux")]
+    use tao::platform::unix::WindowExtUnix;
+    #[cfg(target_os = "linux")]
+    use wry::WebViewBuilderExtUnix;
     #[cfg(not(any(
         target_os = "windows",
         target_os = "macos",
         target_os = "ios",
         target_os = "android"
     )))]
-    use tao::platform::unix::WindowExtUnix;
-    use wry::WebViewBuilderExtUnix;
     let mut builder = {
         let vbox = window.default_vbox().unwrap();
         WebViewBuilder::new_gtk(vbox)
