@@ -17,6 +17,8 @@ To begin using Tissue, add it to your project's `Cargo.toml` file:
 tissue = "0.1.0"
 ```
 
+### Simple Addition Demo
+
 Create an interactive demo with Tissue:
 
 ```rust
@@ -29,6 +31,52 @@ fn main() {
     )
     .expect("Could not run");
 }
+```
+
+### Linear Regression Demo
+
+```rust
+use tissue::{run, Input};
+
+fn main() {
+    // Simple linear regression: y = ax + b
+    run(
+        |x: Vec<f32>| {
+            let input_x = x[0];
+            let slope = x[1];     // 'a' parameter
+            let intercept = x[2]; // 'b' parameter
+            
+            slope * input_x + intercept
+        },
+        &[
+            Input::Number(5.0), // x value
+            Input::Slider {
+                min: -10.0,
+                max: 10.0,
+                step: 0.1,
+                initial_value: 2.0, // slope
+            },
+            Input::Slider {
+                min: -10.0,
+                max: 10.0,
+                step: 0.1,
+                initial_value: 1.0, // intercept
+            },
+        ],
+    )
+    .expect("Could not run linear regression demo");
+}
+```
+
+### Running Examples
+
+```bash
+# Clone the repository
+git clone https://github.com/PsiACE/tissue.git
+cd tissue
+
+# Run different examples
+cargo run --example addition
 ```
 
 ## Licenses
