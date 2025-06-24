@@ -9,7 +9,7 @@ use tao::{
     event_loop::{ControlFlow, EventLoopBuilder},
     window::WindowBuilder,
 };
-use wry::{WebViewAttributes, WebViewBuilder};
+use wry::{WebViewBuilder};
 
 enum UserEvents {
     ExecEval(String),
@@ -50,8 +50,10 @@ where
     let event_loop = EventLoopBuilder::<UserEvents>::with_user_event().build();
     let proxy = event_loop.create_proxy();
 
-    let ipc_handler = move |req: String| {
-        let _ = proxy.send_event(UserEvents::ExecEval(req));
+    let ipc_handler = move |req: wry::http::Request<String>| {
+        let body = req.body();
+        println!("Received IPC message: {}", body);
+        let _ = proxy.send_event(UserEvents::ExecEval(body.clone()));
     };
 
     let window = WindowBuilder::new()
@@ -65,7 +67,7 @@ where
         target_os = "ios",
         target_os = "android"
     ))]
-    let mut builder = WebViewBuilder::new(&window);
+    let builder = WebViewBuilder::new();
 
     #[cfg(target_os = "linux")]
     use tao::platform::unix::WindowExtUnix;
@@ -77,18 +79,16 @@ where
         target_os = "ios",
         target_os = "android"
     )))]
-    let mut builder = {
+    let builder = {
         let vbox = window.default_vbox().unwrap();
         WebViewBuilder::new_gtk(vbox)
     };
 
-    let mut webview_settings = WebViewAttributes::default();
-    webview_settings.devtools = true;
-    builder.attrs = webview_settings;
     let _webview = builder
         .with_html(&html)
         .with_ipc_handler(ipc_handler)
-        .build()
+        .with_devtools(true)
+        .build(&window)
         .unwrap();
 
     event_loop.run(move |event, _, control_flow| {
@@ -152,11 +152,14 @@ fn beginning() -> String {
             <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, shrink-to-fit=no\">
             <link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css\" integrity=\"sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T\" crossorigin=\"anonymous\">
             <script type=\"text/javascript\">
-                function run_calculation() {
+                function run_calculation(event) {
+                    event.preventDefault(); // Disables the default form submission behavior
                     var numbers = [];
                     var classes = document.getElementsByClassName('input');
                     Array.from(classes).forEach((x, i) => numbers.push(Number(x.value)));
-                    ipc.postMessage(numbers.toString());
+                    console.log('Sending numbers:', numbers.toString());
+                    window.ipc.postMessage(numbers.toString());
+                    return false;
                 }
             </script>
         </head>
@@ -164,7 +167,7 @@ fn beginning() -> String {
             <div class=\"container\">
                 <div class=\"row mt-3\">
                     <div class=\"col text-center\">
-                        <form action=\"#\" method=\"POST\" onsubmit=\"run_calculation()\">
+                        <form action=\"#\" method=\"POST\" onsubmit=\"return run_calculation(event)\">
                             <div class=\"form-group row\" id=\"input-group\">".to_string()
 }
 
